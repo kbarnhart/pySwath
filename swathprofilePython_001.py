@@ -3,7 +3,7 @@ import arcpy
 from arcpy import env
 import matplotlib.pyplot as plt
 import numpy as np
-from krb_vecTools import *
+from vecTools import *
 env.overwriteOutput = 1
 arcpy.CheckOutExtension("3D")
 arcpy.CheckOutExtension("Spatial")
