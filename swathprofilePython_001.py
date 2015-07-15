@@ -1,13 +1,8 @@
 print "importing modules"    
-import arcpy
-from arcpy import env
-import matplotlib.pyplot as plt
 import numpy as np
 from vecTools import *
-env.overwriteOutput = 1
-arcpy.CheckOutExtension("3D")
-arcpy.CheckOutExtension("Spatial")
-from arcpy.sa import *
+
+from osgeo import ogr # modify code to just use ogr, not arcGIS
 
 env.workspace = r"C:\Users\Lab User\Desktop\katy\swathProfile\data"
 inPoly='crossSectionLine.shp'
