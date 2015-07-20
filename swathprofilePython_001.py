@@ -9,7 +9,7 @@ folderPath = u'/Users/wiar9509/git/pySwath'
 inPoly='/test/testMultiLine.shp' # input shapefile filename along which raster will be sampled
 inRast='vv.tif' # input raster filename to sample
 width=100.0 # across-flow box dimension [this is in the units of the projection]
-height=5.0 # along-flow box dimension
+height=50.0 # along-flow box dimension
 
 fOutText='fOutCSV.csv' # filename for textfile output
 fOutFigure='fOut.pdf' # filename for figure output
@@ -21,6 +21,7 @@ os.chdir(folderPath)
 import numpy as np
 from krb_vecTools import *
 import matplotlib.pyplot as plt
+import scipy as sci 
 
 from osgeo import ogr # modify code to just use ogr, not arcGIS
 
@@ -42,8 +43,13 @@ numLines=layer.GetFeatureCount()
 
 for lineNo in range(numLines): # need to add additional info for output files if there are more than one line. 20jul15 WHA - did this in 'name' variable below
 	
-	lineX=[]
-	lineY=[]
+	# Initializing
+	lineEast=[]
+	lineNorth=[]
+	dE=[]
+ 	dN=[]
+ 	sampleEast=[]
+ 	sampleNorth=[]
  	
  	feat=layer.GetFeature(lineNo) # Highlights current line
 	geom=feat.geometry()
@@ -54,11 +60,34 @@ for lineNo in range(numLines): # need to add additional info for output files if
 	numPoints=geom.GetPointCount()
 	
 	for nP in range(numPoints): # Iterates over points and appends x,y (easting, northing) coords from current line
-		lineX.append(geom.GetPoint(nP)[0])
-		lineY.append(geom.GetPoint(nP)[1])
-		
+		lineEast.append(geom.GetPoint(nP)[0]) # change in easting from last coordinate [m]
+		lineNorth.append(geom.GetPoint(nP)[1]) # change in northing from last coordinate [m]
+		if nP > 0: # Calculates difference in easting/northing between points for later line length calculation
+			dE.append(lineEast[nP]-lineEast[nP-1])
+			dN.append(lineNorth[nP]-lineNorth[nP-1])
 	
-		
+	# Converting to arrays to do math
+	dE=np.array(dE)
+	dN=np.array(dN)
+	
+	# Finding centroid coordinates for sampling
+	lineSegs=len(dE) # number of line segments
+	segmentLen=np.sqrt(dE**2 + dN**2) # units same as projection
+	pointsInSeg=np.ceil(segmentLen/height)
+	dEseg=dE/pointsInSeg
+	dNseg=dN/pointsInSeg
+	
+	for segNo in range(lineSegs): # iterate over line segments to generate coordinates
+		index=np.linspace(1,pointsInSeg[segNo]+1,pointsInSeg[segNo]+1) # list from 1 to number of sampling points in line segment
+		sampleEast.append(lineEast[segNo]+dEseg[segNo]*index)
+		sampleNorth.append(lineNorth[segNo]+dNseg[segNo]*index)
+		plt.plot(sampleEast[segNo],sampleNorth[segNo],'.')
+
+	# Plotting to make sure everything working	
+	plt.plot(lineEast,lineNorth,'o')
+	plt.show()
+	plt.axis('equal')
+
 	# interpolate to the spacing specified by height (get x,y coordinates along the line at a distance of height apart)
 	# put them into an array called ptArray, that is a list of lists, with each interior list being [pointX, pointY]
 	# e.g. ptArray.append([pointX, pointY]) 
