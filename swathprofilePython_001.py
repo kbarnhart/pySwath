@@ -50,6 +50,7 @@ for lineNo in range(numLines): # need to add additional info for output files if
  	dN=[]
  	sampleEast=[]
  	sampleNorth=[]
+ 	ptArray=[]
  	
  	feat=layer.GetFeature(lineNo) # Highlights current line
 	geom=feat.geometry()
@@ -82,50 +83,41 @@ for lineNo in range(numLines): # need to add additional info for output files if
 		sampleEast.append(lineEast[segNo]+dEseg[segNo]*index)
 		sampleNorth.append(lineNorth[segNo]+dNseg[segNo]*index)
 		plt.plot(sampleEast[segNo],sampleNorth[segNo],'.')
+		
+	# Was in a weird format before because of segNo loop. This makes it a better array
+	sampleEast=np.concatenate(sampleEast,axis=0)
+	sampleNorth=np.concatenate(sampleNorth,axis=0)
+	
+	# Converting from array to list
+	sampleEast=sampleEast.tolist()
+	sampleNorth=sampleNorth.tolist()
+	
+	for coord in range(len(sampleEast)):
+		ptArray.append((sampleEast[coord],sampleNorth[coord]))
+	
+	# Putting easting and northing coordinates together
+	#ptArray=(sampleEast,sampleNorth)
+	
+	
+	#for point in 
 
 	# Plotting to make sure everything working	
 	plt.plot(lineEast,lineNorth,'o')
 	plt.show()
 	plt.axis('equal')
-
-	# interpolate to the spacing specified by height (get x,y coordinates along the line at a distance of height apart)
-	# put them into an array called ptArray, that is a list of lists, with each interior list being [pointX, pointY]
-	# e.g. ptArray.append([pointX, pointY]) 
 	
-	
-   
-# 	coordSys=arcpy.Describe(inPoly).spatialReference.exporttostring()
-# 	arcpy.InterpolateShape_3d (inRast, inPoly, tempPoly,height)
-# 
-# 	
-	# xOut=[]
-# 	yOut=[]
-# 	print "get all points along the swath line"
-# 	ptArray=[]
-# 
-# 
-# 
-# 
-# 	rows=arcpy.SearchCursor(tempPoly)
-# 	for row in rows:
-# 		points=row.shape.getPart(0)
-# 		for point in points:
-# 			xOut.append(point.X)
-# 			yOut.append(point.Y)
-# 			ptArray.append([point.X, point.Y])
-# 	del row, rows
 	 
-	print "calculate the slope and perpendicular slope along the line"
+	print "Calculating the slope and perpendicular slope along the line"
 	hwin=5
 	slope, perpSlope=calcSlopeAndPerpSlope(ptArray, hwin)
 
-	print "store the coordiates of the swath cross section lines"
+	print "Storing the coordiates of the swath cross section lines"
 	polygons=[]
 	for i in range(len(ptArray)):
 		polygons.append(makePoly(ptArray[i], perpSlope[i], width, height))
 
 	#calculate distance along the line
-	distOut=distanceAlongLine(xOut,yOut)
+	distOut=distanceAlongLine(sampleEast,sampleNorth)
 
 	# initialize spatial containers (Need to revise with OGR output)
 	
