@@ -43,6 +43,12 @@ crs = layer.GetSpatialRef() # Coordinate reference system
 
 numLines=layer.GetFeatureCount() # Number of lines in shapefile
 
+
+# create the spatial reference, WGS84
+srs = osr.SpatialReference()
+srs.ImportFromEPSG(32607)
+
+
 for lineNo in range(numLines): # need to add additional info for output files if there are more than one line. 20jul15 WHA - did this in 'name' variable below
 	# Initializing
 	lineEast=[]
@@ -119,36 +125,65 @@ for lineNo in range(numLines): # need to add additional info for output files if
 	# Sourced ideas for the below lines from http://www.gis.usu.edu/~chrisg/python/2008/os2_slides.pdf
 	
 	# Initializing
-	multiBox= ogr.Geometry(ogr.wkbMultiPolygon)
+	#multiBox= ogr.Geometry(ogr.wkbMultiPolygon)
 	numBoxes=len(polygons)
 
-	# Iterating over coordinates to create polygons
-	for poly in range(numBoxes):
-		ring=ogr.Geometry(ogr.wkbLinearRing)
-		ring.AddPoint(polygons[poly][0][0],polygons[poly][0][1]) # adding easting/northing for each vertex
-		ring.AddPoint(polygons[poly][1][0],polygons[poly][1][1])
-		ring.AddPoint(polygons[poly][2][0],polygons[poly][2][1])
-		ring.AddPoint(polygons[poly][3][0],polygons[poly][3][1])
-		ring.CloseRings()
-		
-		box=ogr.Geometry(ogr.wkbPolygon)
-		box.AddGeometry(ring)
-		multiBox.AddGeometry(box)
-	
 	# I am not sure what a lot of this means, but it is required to build a shapefile
 	if os.path.exists(name+"multiBox.shp"):
 		driver.DeleteDataSource(name+"multiBox.shp") # error if data source already exists
 	newDataSource=driver.CreateDataSource(name+"multiBox.shp")
-	newLayer=newDataSource.CreateLayer('test',geom_type=ogr.wkbMultiPolygon)
+	newLayer=newDataSource.CreateLayer(name+"multiBox",srs,geom_type=ogr.wkbPolygon)
 	fieldDefn=ogr.FieldDefn('id',ogr.OFTInteger)
 	#newLayer.CreateField(ogr.FieldDefn("name",ogr.OFTString))
+	newLayer.CreateField(fieldDefn)
 	newLayer.CreateField(ogr.FieldDefn("east",ogr.OFTReal))
 	newLayer.CreateField(ogr.FieldDefn("north",ogr.OFTReal))
 	newLayer.CreateField(ogr.FieldDefn("dist",ogr.OFTReal))
 	newLayer.CreateField(ogr.FieldDefn("min",ogr.OFTReal))
 	newLayer.CreateField(ogr.FieldDefn("mean",ogr.OFTReal))
 	newLayer.CreateField(ogr.FieldDefn("max",ogr.OFTReal))
-	newLayer.CreateField(fieldDefn)
+
+	# Iterating over coordinates to create polygons
+	for poly in range(numBoxes):
+		# create the feature
+		feature = ogr.Feature(newLayer.GetLayerDefn())
+		
+		# Set the attributes using the values from the delimited text file
+
+
+
+		# Set Geometry
+		ring=ogr.Geometry(ogr.wkbLinearRing)
+		ring.AddPoint(polygons[poly][0][0],polygons[poly][0][1]) # adding easting/northing for each vertex
+		ring.AddPoint(polygons[poly][1][0],polygons[poly][1][1])
+		ring.AddPoint(polygons[poly][2][0],polygons[poly][2][1])
+		ring.AddPoint(polygons[poly][3][0],polygons[poly][3][1])
+		ring.CloseRings()
+
+		polygon = ogr.Geometry(ogr.wkbPolygon)
+	
+		polygon.AddGeometry(ring)
+		feature.SetGeometryDirectly(polygon)
+		feature.SetField('id',poly)
+		
+		# Create the feature in the layer (shapefile)
+		newLayer.CreateFeature(feature)
+		
+		# Destroy the feature to free resources
+		feature.Destroy()
+
+		# Destroy the data source to free resources
+	newDataSource.Destroy()
+
+	
+	
+	
+	
+	
+	
+	
+	
+
 		
 # 	for i in range(numBoxes):
 # 		newGeom=multiBox.GetGeometryRef(i)
@@ -169,12 +204,12 @@ for lineNo in range(numLines): # need to add additional info for output files if
 # 		feature.SetField('east',sampleEast[i])
 # 		feature.SetField('north',sampleNorth[i])
 		
-	feature.SetGeometry(multiBox) # not sure if this right; outputs '0'
-	#feature.SetField('id',1)
-	newLayer.CreateFeature(feature)
-	
-	newDataSource.Destroy() # closes data source and writes shapefile
-	
+# 	feature.SetGeometry(multiBox) # not sure if this right; outputs '0'
+# 	#feature.SetField('id',1)
+# 	newLayer.CreateFeature(feature)
+# 	
+# 	newDataSource.Destroy() # closes data source and writes shapefile
+# 	
 	
 	#fieldDefn.SetWidth(5)
 
