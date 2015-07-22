@@ -1,4 +1,5 @@
-print "importing modules"    
+print "STARTING SWATH PROFILER"
+print "Importing modules"    
 
 
 # ultimately we want to make this a function, with the following input information:
@@ -43,7 +44,7 @@ crs = layer.GetSpatialRef() # Coordinate reference system
 numLines=layer.GetFeatureCount() # Number of lines in shapefile
 
 for lineNo in range(numLines): # need to add additional info for output files if there are more than one line. 20jul15 WHA - did this in 'name' variable below
-	
+	print "PROCESSING TRANSECT "+name.upper()
 	# Initializing
 	lineEast=[]
 	lineNorth=[]
@@ -57,7 +58,7 @@ for lineNo in range(numLines): # need to add additional info for output files if
 	geom=feat.geometry()
 	name=feat.GetField(1) # Gets current line name
 	
-	print "Getting coordinates along line: "+name
+	print "Getting coordinates along line"
 	
 	numPoints=geom.GetPointCount()
 	
@@ -119,9 +120,10 @@ for lineNo in range(numLines): # need to add additional info for output files if
 	
 	# Initializing
 	multiBox= ogr.Geometry(ogr.wkbMultiPolygon)
+	numBoxes=len(polygons)
 
 	# Iterating over coordinates to create polygons
-	for poly in range(len(polygons)):
+	for poly in range(numBoxes):
 		ring=ogr.Geometry(ogr.wkbLinearRing)
 		ring.AddPoint(polygons[poly][0][0],polygons[poly][0][1]) # adding easting/northing for each vertex
 		ring.AddPoint(polygons[poly][1][0],polygons[poly][1][1])
@@ -134,16 +136,33 @@ for lineNo in range(numLines): # need to add additional info for output files if
 		multiBox.AddGeometry(box)
 	
 	# I am not sure what a lot of this means, but it is required to build a shapefile
-	fieldDefn=ogr.FieldDefn('id',ogr.OFTInteger)
 	if os.path.exists(name+"multiBox.shp"):
 		driver.DeleteDataSource(name+"multiBox.shp") # error if data source already exists
 	newDataSource=driver.CreateDataSource(name+"multiBox.shp")
 	newLayer=newDataSource.CreateLayer('test',geom_type=ogr.wkbMultiPolygon)
+	fieldDefn=ogr.FieldDefn('id',ogr.OFTInteger)
 	newLayer.CreateField(fieldDefn)
-	featureDefn=newLayer.GetLayerDefn()
-	feature=ogr.Feature(featureDefn)
+	#newLayer.CreateField(ogr.FieldDefn("name",ogr.OFTString))
+	newLayer.CreateField(ogr.FieldDefn("east",ogr.OFTReal))
+	newLayer.CreateField(ogr.FieldDefn("north",ogr.OFTReal))
+	newLayer.CreateField(ogr.FieldDefn("dist",ogr.OFTReal))
+	newLayer.CreateField(ogr.FieldDefn("min",ogr.OFTReal))
+	newLayer.CreateField(ogr.FieldDefn("mean",ogr.OFTReal))
+	newLayer.CreateField(ogr.FieldDefn("max",ogr.OFTReal))
+	
+	#featureDefn=newLayer.GetLayerDefn()
+	#feature=ogr.Feature(featureDefn)
+	# Trying to get it to add values for each box, but right now just seeing the whole multipolygon as one thing
+	for i in range(numBoxes):
+		featureDefn=newLayer.GetLayerDefn()
+		feature=ogr.Feature(featureDefn)
+		# Set attributes
+		feature.SetField('id',i)
+		feature.SetField('east',sampleEast[i])
+		feature.SetField('north',sampleNorth[i])
+		
 	feature.SetGeometry(multiBox) # not sure if this right; outputs '0'
-	feature.SetField('id',1)
+	#feature.SetField('id',1)
 	newLayer.CreateFeature(feature)
 	
 	newDataSource.Destroy() # closes data source and writes shapefile
@@ -203,51 +222,51 @@ for lineNo in range(numLines): # need to add additional info for output files if
 # 	del point, array
 	
 	# initialize output part2
-	meanOut=[]
-	minOut=[]
-	maxOut=[]
-	print 'Calculate the mean, min, max and distance for each part of the swath'	
-	ZSarea='tempTable.dbf'
-	outZSaT=ZonalStatisticsAsTable(tempPoly2, 'FID', inRast, ZSarea)
-
-	trows=arcpy.SearchCursor(ZSarea)
-	for trow in trows:
-		# save the 3 d area into a dictionary with the key as the FID, this is not in the loop
-		# since these zonal statistics only need to be done once. 
-		meanOut.append(trow.getValue('MEAN'))
-		minOut.append(trow.getValue('MIN'))
-		maxOut.append(trow.getValue('MAX'))
-	del outZSaT, trows, trow        
-
-	print 'delete the temporary files' 
-	# arcpy.DeleteFeatures_management (tempPoly) 
-	# arcpy.DeleteFeatures_management (tempPoly2) 
-	# arcpy.DeleteFeatures_management (ZSAREA) 
-
-	print 'Save Values'
-	saveOut=[np.asarray(xOut), np.asarray(yOut), np.asarray(distOut),np.asarray(meanOut), np.asarray(minOut), np.asarray(maxOut)] 
-	np.savetxt(fOutText, np.asarray(saveOut).T, delimiter=',')
-
-	print "Make Plot"
-	fig1=plt.figure(num=None, figsize=(3.35, 5), dpi=300, facecolor='w', edgecolor='w')
-	#fig1.patch.set_alpha(0.0)
-
-	ax = fig1.add_subplot(1,1,1)
-
-	p1,=plt.plot(distOut, meanOut, lw=2, color='k', ls='-')
-	p2,=plt.plot(distOut, minOut, lw=1, color='grey', ls='-')
-	p3,=plt.plot(distOut, maxOut, lw=1, color='grey', ls='--')
-
-	lg1=plt.legend([p1, p2, p3], ['Mean', 'Minimum', 'Maximum'], loc='upper left', fancybox=True,bbox_to_anchor=(0, 1))
-	lg1.get_frame().set_edgecolor('grey')
-	lg1.get_frame().set_linewidth(0.5)
-
-	plt.tick_params(axis='both', which='major', labelsize=6)
-	plt.tick_params(axis='both', which='minor', labelsize=6)
-
-	plt.xlabel('Distance along Profile',fontsize=8)    
-	plt.ylabel('Value',fontsize=8) 
-	plt.title('Swath' ,fontsize=10)
-
-	plt.savefig(fOutFigure, format='pdf')
-	plt.show()
+# 	meanOut=[]
+# 	minOut=[]
+# 	maxOut=[]
+# 	print 'Calculate the mean, min, max and distance for each part of the swath'	
+# 	ZSarea='tempTable.dbf'
+# 	outZSaT=ZonalStatisticsAsTable(tempPoly2, 'FID', inRast, ZSarea)
+# 
+# 	trows=arcpy.SearchCursor(ZSarea)
+# 	for trow in trows:
+# 		# save the 3 d area into a dictionary with the key as the FID, this is not in the loop
+# 		# since these zonal statistics only need to be done once. 
+# 		meanOut.append(trow.getValue('MEAN'))
+# 		minOut.append(trow.getValue('MIN'))
+# 		maxOut.append(trow.getValue('MAX'))
+# 	del outZSaT, trows, trow        
+# 
+# 	print 'delete the temporary files' 
+# 	# arcpy.DeleteFeatures_management (tempPoly) 
+# 	# arcpy.DeleteFeatures_management (tempPoly2) 
+# 	# arcpy.DeleteFeatures_management (ZSAREA) 
+# 
+# 	print 'Save Values'
+# 	saveOut=[np.asarray(xOut), np.asarray(yOut), np.asarray(distOut),np.asarray(meanOut), np.asarray(minOut), np.asarray(maxOut)] 
+# 	np.savetxt(fOutText, np.asarray(saveOut).T, delimiter=',')
+# 
+# 	print "Make Plot"
+# 	fig1=plt.figure(num=None, figsize=(3.35, 5), dpi=300, facecolor='w', edgecolor='w')
+# 	#fig1.patch.set_alpha(0.0)
+# 
+# 	ax = fig1.add_subplot(1,1,1)
+# 
+# 	p1,=plt.plot(distOut, meanOut, lw=2, color='k', ls='-')
+# 	p2,=plt.plot(distOut, minOut, lw=1, color='grey', ls='-')
+# 	p3,=plt.plot(distOut, maxOut, lw=1, color='grey', ls='--')
+# 
+# 	lg1=plt.legend([p1, p2, p3], ['Mean', 'Minimum', 'Maximum'], loc='upper left', fancybox=True,bbox_to_anchor=(0, 1))
+# 	lg1.get_frame().set_edgecolor('grey')
+# 	lg1.get_frame().set_linewidth(0.5)
+# 
+# 	plt.tick_params(axis='both', which='major', labelsize=6)
+# 	plt.tick_params(axis='both', which='minor', labelsize=6)
+# 
+# 	plt.xlabel('Distance along Profile',fontsize=8)    
+# 	plt.ylabel('Value',fontsize=8) 
+# 	plt.title('Swath' ,fontsize=10)
+# 
+# 	plt.savefig(fOutFigure, format='pdf')
+# 	plt.show()
