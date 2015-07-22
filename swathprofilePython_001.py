@@ -44,7 +44,6 @@ crs = layer.GetSpatialRef() # Coordinate reference system
 numLines=layer.GetFeatureCount() # Number of lines in shapefile
 
 for lineNo in range(numLines): # need to add additional info for output files if there are more than one line. 20jul15 WHA - did this in 'name' variable below
-	print "PROCESSING TRANSECT "+name.upper()
 	# Initializing
 	lineEast=[]
 	lineNorth=[]
@@ -58,6 +57,7 @@ for lineNo in range(numLines): # need to add additional info for output files if
 	geom=feat.geometry()
 	name=feat.GetField(1) # Gets current line name
 	
+	print "PROCESSING TRANSECT "+name.upper()
 	print "Getting coordinates along line"
 	
 	numPoints=geom.GetPointCount()
@@ -141,7 +141,6 @@ for lineNo in range(numLines): # need to add additional info for output files if
 	newDataSource=driver.CreateDataSource(name+"multiBox.shp")
 	newLayer=newDataSource.CreateLayer('test',geom_type=ogr.wkbMultiPolygon)
 	fieldDefn=ogr.FieldDefn('id',ogr.OFTInteger)
-	newLayer.CreateField(fieldDefn)
 	#newLayer.CreateField(ogr.FieldDefn("name",ogr.OFTString))
 	newLayer.CreateField(ogr.FieldDefn("east",ogr.OFTReal))
 	newLayer.CreateField(ogr.FieldDefn("north",ogr.OFTReal))
@@ -149,17 +148,26 @@ for lineNo in range(numLines): # need to add additional info for output files if
 	newLayer.CreateField(ogr.FieldDefn("min",ogr.OFTReal))
 	newLayer.CreateField(ogr.FieldDefn("mean",ogr.OFTReal))
 	newLayer.CreateField(ogr.FieldDefn("max",ogr.OFTReal))
-	
+	newLayer.CreateField(fieldDefn)
+		
+# 	for i in range(numBoxes):
+# 		newGeom=multiBox.GetGeometryRef(i)
+# 		newLayer.SetFeature(i)
+# 		i.SetField("id",i)
+# 		newLayer.SetFeature(i)
+
+		
+		
 	#featureDefn=newLayer.GetLayerDefn()
 	#feature=ogr.Feature(featureDefn)
 	# Trying to get it to add values for each box, but right now just seeing the whole multipolygon as one thing
-	for i in range(numBoxes):
-		featureDefn=newLayer.GetLayerDefn()
-		feature=ogr.Feature(featureDefn)
-		# Set attributes
-		feature.SetField('id',i)
-		feature.SetField('east',sampleEast[i])
-		feature.SetField('north',sampleNorth[i])
+# 	for i in range(numBoxes):
+# 		featureDefn=newLayer.GetLayerDefn()
+# 		feature=ogr.Feature(featureDefn)
+# 		# Set attributes
+# 		feature.SetField('id',i)
+# 		feature.SetField('east',sampleEast[i])
+# 		feature.SetField('north',sampleNorth[i])
 		
 	feature.SetGeometry(multiBox) # not sure if this right; outputs '0'
 	#feature.SetField('id',1)
