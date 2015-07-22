@@ -24,6 +24,7 @@ import matplotlib.pyplot as plt
 import scipy as sci 
 
 from osgeo import ogr # modify code to just use ogr, not arcGIS
+from osgeo import osr
 
 
 ### PROCESSING ###
@@ -37,9 +38,9 @@ shapefile=folderPath+inPoly
 driver = ogr.GetDriverByName("ESRI Shapefile")
 dataSource = driver.Open(shapefile, 0)
 layer = dataSource.GetLayer()
+crs = layer.GetSpatialRef() # Coordinate reference system
 
-# get all points along shapefile
-numLines=layer.GetFeatureCount()
+numLines=layer.GetFeatureCount() # Number of lines in shapefile
 
 for lineNo in range(numLines): # need to add additional info for output files if there are more than one line. 20jul15 WHA - did this in 'name' variable below
 	
@@ -92,21 +93,16 @@ for lineNo in range(numLines): # need to add additional info for output files if
 	sampleEast=sampleEast.tolist()
 	sampleNorth=sampleNorth.tolist()
 	
+	# Putting easting and northing coordinates together into a list of lists
 	for coord in range(len(sampleEast)):
 		ptArray.append((sampleEast[coord],sampleNorth[coord]))
 	
-	# Putting easting and northing coordinates together
-	#ptArray=(sampleEast,sampleNorth)
-	
-	
-	#for point in 
-
 	# Plotting to make sure everything working	
 	plt.plot(lineEast,lineNorth,'o')
 	plt.show()
 	plt.axis('equal')
 	
-	 
+	# Vectools to generate polygons (rectangles) for zonal stats 
 	print "Calculating the slope and perpendicular slope along the line"
 	hwin=5
 	slope, perpSlope=calcSlopeAndPerpSlope(ptArray, hwin)
@@ -115,14 +111,74 @@ for lineNo in range(numLines): # need to add additional info for output files if
 	polygons=[]
 	for i in range(len(ptArray)):
 		polygons.append(makePoly(ptArray[i], perpSlope[i], width, height))
+	# Format of polygon coordinates is lower right (LR), LL, UL, UR
+	
+	### CREATING POLYGONS ###
+	
+	# Sourced ideas for the below lines from http://www.gis.usu.edu/~chrisg/python/2008/os2_slides.pdf
+	
+	# Initializing
+	multiBox= ogr.Geometry(ogr.wkbMultiPolygon)
 
-	#calculate distance along the line
-	distOut=distanceAlongLine(sampleEast,sampleNorth)
+	# Iterating over coordinates to create polygons
+	for poly in range(len(polygons)):
+		ring=ogr.Geometry(ogr.wkbLinearRing)
+		ring.AddPoint(polygons[poly][0][0],polygons[poly][0][1]) # adding easting/northing for each vertex
+		ring.AddPoint(polygons[poly][1][0],polygons[poly][1][1])
+		ring.AddPoint(polygons[poly][2][0],polygons[poly][2][1])
+		ring.AddPoint(polygons[poly][3][0],polygons[poly][3][1])
+		ring.CloseRings()
+		
+		box=ogr.Geometry(ogr.wkbPolygon)
+		box.AddGeometry(ring)
+		multiBox.AddGeometry(box)
+	
+	# I am not sure what a lot of this means, but it is required to build a shapefile
+	fieldDefn=ogr.FieldDefn('id',ogr.OFTInteger)
+	if os.path.exists(name+"multiBox.shp"):
+		driver.DeleteDataSource(name+"multiBox.shp") # error if data source already exists
+	newDataSource=driver.CreateDataSource(name+"multiBox.shp")
+	newLayer=newDataSource.CreateLayer('test',geom_type=ogr.wkbMultiPolygon)
+	newLayer.CreateField(fieldDefn)
+	featureDefn=newLayer.GetLayerDefn()
+	feature=ogr.Feature(featureDefn)
+	feature.SetGeometry(multiBox) # not sure if this right; outputs '0'
+	feature.SetField('id',1)
+	newLayer.CreateFeature(feature)
+	
+	newDataSource.Destroy() # closes data source and writes shapefile
+	
+	
+	#fieldDefn.SetWidth(5)
 
-	# initialize spatial containers (Need to revise with OGR output)
-	
-	
-	
+# 		polyNow = 'box'+str(poly)
+# 		eval(polyNow+" = ogr.Geometry(ogr.wkbLinearRing)")
+# 		eval(polyNow+".addPoint(polygons[0])")
+# 		polynow.addPoint(polygons[1])
+# 		polynow.addPoint(polygons[2])
+# 		polynow.addPoint(polygons[3])
+
+		#box+poly = (1,1)
+# 	#calculate distance along the line
+# 	distOut=distanceAlongLine(sampleEast,sampleNorth)
+# 
+# 	# initialize spatial containers (Need to revise with OGR output)
+# 	# Below lines copied from "Create a new shapefile and add data" on https://pcjericks.github.io/py-gdalogr-cookbook/vector_layers.html#create-a-new-shapefile-and-add-data. I am pretty confused about what each step was actually doing.
+# 	
+# 	# Create data source
+# 	newShapefile=driver.CreateDataSource(name+"_polygons.shp")
+# 	
+# 	# Create spatial reference
+# 	srs=osr.SpatialReference()
+# 	srs.ImportFromEPSG(32607) # This hard-coded to UTM 7N w/ WGS84 datum. Would be nice to have this defined based of input shapefile
+# 	
+# 	# Create layer
+# 	newLayer=newShapefile.CreateLayer(name,srs,ogr.wkbPoint)
+# 	
+# 	# Adding fields to shapefile
+# 	boxNum=ogr.FieldDefn("boxNum",ogr.OFTInteger)
+# 	boxNum
+# 	
 	
 	# point=arcpy.Point()
 # 	array=arcpy.Array()
