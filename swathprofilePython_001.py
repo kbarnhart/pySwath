@@ -44,9 +44,9 @@ crs = layer.GetSpatialRef() # Coordinate reference system
 numLines=layer.GetFeatureCount() # Number of lines in shapefile
 
 
-# create the spatial reference, WGS84
+# create the spatial reference
 srs = osr.SpatialReference()
-srs.ImportFromEPSG(32607)
+srs.ImportFromEPSG(32607) # This hard-coded to UTM 7N w/ WGS84 datum. Would be nice to have this defined based of input shapefile
 
 
 for lineNo in range(numLines): # need to add additional info for output files if there are more than one line. 20jul15 WHA - did this in 'name' variable below
@@ -119,20 +119,22 @@ for lineNo in range(numLines): # need to add additional info for output files if
 	for i in range(len(ptArray)):
 		polygons.append(makePoly(ptArray[i], perpSlope[i], width, height))
 	# Format of polygon coordinates is lower right (LR), LL, UL, UR
+
+	#calculate distance along the line
+ 	lineDist=distanceAlongLine(sampleEast,sampleNorth)
 	
 	### CREATING POLYGONS ###
 	
 	# Sourced ideas for the below lines from http://www.gis.usu.edu/~chrisg/python/2008/os2_slides.pdf
 	
 	# Initializing
-	#multiBox= ogr.Geometry(ogr.wkbMultiPolygon)
 	numBoxes=len(polygons)
 
 	# I am not sure what a lot of this means, but it is required to build a shapefile
-	if os.path.exists(name+"multiBox.shp"):
-		driver.DeleteDataSource(name+"multiBox.shp") # error if data source already exists
-	newDataSource=driver.CreateDataSource(name+"multiBox.shp")
-	newLayer=newDataSource.CreateLayer(name+"multiBox",srs,geom_type=ogr.wkbPolygon)
+	if os.path.exists(name+"polygons.shp"):
+		driver.DeleteDataSource(name+"polygons.shp") # error if data source already exists
+	newDataSource=driver.CreateDataSource(name+"polygons.shp")
+	newLayer=newDataSource.CreateLayer(name+"polygons",srs,geom_type=ogr.wkbPolygon)
 	fieldDefn=ogr.FieldDefn('id',ogr.OFTInteger)
 	#newLayer.CreateField(ogr.FieldDefn("name",ogr.OFTString))
 	newLayer.CreateField(fieldDefn)
@@ -148,10 +150,6 @@ for lineNo in range(numLines): # need to add additional info for output files if
 		# create the feature
 		feature = ogr.Feature(newLayer.GetLayerDefn())
 		
-		# Set the attributes using the values from the delimited text file
-
-
-
 		# Set Geometry
 		ring=ogr.Geometry(ogr.wkbLinearRing)
 		ring.AddPoint(polygons[poly][0][0],polygons[poly][0][1]) # adding easting/northing for each vertex
@@ -161,10 +159,18 @@ for lineNo in range(numLines): # need to add additional info for output files if
 		ring.CloseRings()
 
 		polygon = ogr.Geometry(ogr.wkbPolygon)
-	
 		polygon.AddGeometry(ring)
 		feature.SetGeometryDirectly(polygon)
-		feature.SetField('id',poly)
+		
+		# Setting fields
+		feature.SetField('id',poly) # id number
+		featPoly=polygon.GetGeometryRef(0) # pointer
+		featEast=featPoly.GetX()
+		featNorth=featPoly.GetY()
+		feature.SetField('east',featEast) # easting (centroid I think)
+		feature.SetField('north',featNorth) # northing
+		featDist=lineDist[poly]
+		feature.SetField('dist',featDist) # distance along line
 		
 		# Create the feature in the layer (shapefile)
 		newLayer.CreateFeature(feature)
@@ -174,96 +180,7 @@ for lineNo in range(numLines): # need to add additional info for output files if
 
 		# Destroy the data source to free resources
 	newDataSource.Destroy()
-
-	
-	
-	
-	
-	
-	
-	
-	
-
-		
-# 	for i in range(numBoxes):
-# 		newGeom=multiBox.GetGeometryRef(i)
-# 		newLayer.SetFeature(i)
-# 		i.SetField("id",i)
-# 		newLayer.SetFeature(i)
-
-		
-		
-	#featureDefn=newLayer.GetLayerDefn()
-	#feature=ogr.Feature(featureDefn)
-	# Trying to get it to add values for each box, but right now just seeing the whole multipolygon as one thing
-# 	for i in range(numBoxes):
-# 		featureDefn=newLayer.GetLayerDefn()
-# 		feature=ogr.Feature(featureDefn)
-# 		# Set attributes
-# 		feature.SetField('id',i)
-# 		feature.SetField('east',sampleEast[i])
-# 		feature.SetField('north',sampleNorth[i])
-		
-# 	feature.SetGeometry(multiBox) # not sure if this right; outputs '0'
-# 	#feature.SetField('id',1)
-# 	newLayer.CreateFeature(feature)
-# 	
-# 	newDataSource.Destroy() # closes data source and writes shapefile
-# 	
-	
-	#fieldDefn.SetWidth(5)
-
-# 		polyNow = 'box'+str(poly)
-# 		eval(polyNow+" = ogr.Geometry(ogr.wkbLinearRing)")
-# 		eval(polyNow+".addPoint(polygons[0])")
-# 		polynow.addPoint(polygons[1])
-# 		polynow.addPoint(polygons[2])
-# 		polynow.addPoint(polygons[3])
-
-		#box+poly = (1,1)
-# 	#calculate distance along the line
-# 	distOut=distanceAlongLine(sampleEast,sampleNorth)
-# 
-# 	# initialize spatial containers (Need to revise with OGR output)
-# 	# Below lines copied from "Create a new shapefile and add data" on https://pcjericks.github.io/py-gdalogr-cookbook/vector_layers.html#create-a-new-shapefile-and-add-data. I am pretty confused about what each step was actually doing.
-# 	
-# 	# Create data source
-# 	newShapefile=driver.CreateDataSource(name+"_polygons.shp")
-# 	
-# 	# Create spatial reference
-# 	srs=osr.SpatialReference()
-# 	srs.ImportFromEPSG(32607) # This hard-coded to UTM 7N w/ WGS84 datum. Would be nice to have this defined based of input shapefile
-# 	
-# 	# Create layer
-# 	newLayer=newShapefile.CreateLayer(name,srs,ogr.wkbPoint)
-# 	
-# 	# Adding fields to shapefile
-# 	boxNum=ogr.FieldDefn("boxNum",ogr.OFTInteger)
-# 	boxNum
-# 	
-	
-	# point=arcpy.Point()
-# 	array=arcpy.Array()
-# 	featureList=[]
-# 	print "create polygons"
-# 	itter=0
-# 	for coordPair in polygons:
-# 		for pt in coordPair:
-# 			point.X=pt[0]
-# 			point.Y=pt[1]
-# 			array.add(point) 
-# 		
-# 		array.add(array.getObject(0))     
-# 		polygon = arcpy.Polygon(array)
-# 		array.removeAll()
-# 		featureList.append(polygon)
-# 	
-# 		arcpy.CopyFeatures_management(featureList, tempPoly2)    
-# 		arcpy.DefineProjection_management(tempPoly2, coordSys) 
-# 		itter+=1
-# 		print str(itter)+'/'+str(len(polygons))
-# 	del point, array
-	
+	 	
 	# initialize output part2
 # 	meanOut=[]
 # 	minOut=[]
