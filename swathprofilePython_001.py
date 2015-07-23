@@ -199,15 +199,15 @@ for lineNo in range(numLines):
 	print "Creating features in GRASS and performing zonal statistics"
 
 	# Read in raster to sample
-	grass.run_command("r.in.gdal",flags='e',overwrite=True,input=folderPath+inRast,output='sampleRast')
+	grass.run_command("r.in.gdal",flags='e',overwrite=True,quiet=True,input=folderPath+inRast,output='sampleRast')
 	# Read in polygons to use as sampling bins
-	grass.run_command("v.in.ogr",overwrite=True,input=folderPath+'/'+name+"polygons.shp",output='samplePolys')
+	grass.run_command("v.in.ogr",overwrite=True,quiet=True,input=folderPath+'/'+name+"polygons.shp",output='samplePolys')
 	# Make sure computational region contains polygons
-	grass.run_command("g.region",vec='samplePolys',res='10')
+	grass.run_command("g.region",quiet=True,vec='samplePolys',res='10')
 	# Convert polygons vector into 'zone' raster for sampling
-	grass.run_command("v.to.rast",overwrite=True,input='samplePolys',output='zoneRast',use='attr',attr='id')
+	grass.run_command("v.to.rast",overwrite=True,quiet=True,input='samplePolys',output='zoneRast',use='attr',attr='id')
 	# Run univariate statistics on sample raster, using zone raster to bin and populate new rows
-	grass.run_command("r.univar",overwrite=True,flags='t',map='sampleRast', zones='zoneRast', out=outTextFilename, sep=',',)
+	grass.run_command("r.univar",overwrite=True,quiet=True,flags='t',map='sampleRast', zones='zoneRast', out=outTextFilename, sep=',',)
 	# You now have a file named $outTextFilename in the folder in which this swath profiler code lives
 	
 	### END GRASS PORTION ###
@@ -218,24 +218,43 @@ for lineNo in range(numLines):
 	mean=[]
 	stdDev=[]
 	sum=[]
-	numPixels=[]
 	
 	# Read in stats file
 	print 'Reading in statistics file and updating shapefile'
-	statsFile=np.genfromtxt(outTextFilename,delimiter=',')
+	statsFile=np.genfromtxt(outTextFilename,delimiter=',',skip_header=1)
 	statsLen=len(statsFile)
-	
+
 	# Opening layer to populate stats values in shapefile created above
-	updateShapefile=ogr.Open(name+"polygons.shp")		
-	updateLayer=updateShapefile.GetLayer(0)
-	
+	updateDatasource = driver.Open(name+"polygons.shp", update=1)
+	updateLayer = updateDatasource.GetLayer()
+
 	for line in range(statsLen): # First value of these is nan
+
 		min.append(statsFile[line][4]) # minimum value of raster within polygon
 		max.append(statsFile[line][5]) # maximum value
 		rangeVals.append(statsFile[line][6]) # range of values
 		mean.append(statsFile[line][7]) # mean value
 		stdDev.append(statsFile[line][9]) # standard deviation of values
 		sum.append(statsFile[line][12])	# sum of values
+
+		# Iterating over boxes
+		feat=updateLayer.GetFeature(line)
+		feat.SetField('min',min[line])
+		feat.SetField('max',max[line])
+		feat.SetField('mean',mean[line])
+		feat.SetField('range',rangeVals[line])
+		feat.SetField('stddev',stdDev[line])
+		feat.SetField('sum',sum[line])
+
+		# Update the feature in the layer
+		updateLayer.SetFeature(feat)
+
+		# Destroy the feature to free resources
+		feat.Destroy()
+
+	# Destroy the data source to free resources
+	updateDatasource.Destroy()
+
 
 	
 	# 	print 'Save Values'
