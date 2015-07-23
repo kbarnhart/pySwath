@@ -1,23 +1,21 @@
 ### Swath profiler code ###
 # Written by William Armstrong and Katy Barnhart, with code modified from KRB's Arc-based profiler
 # Begun 15 July 2015
-# Finished xxxx
+# Finished 23 July 2015
 
 print "STARTING SWATH PROFILER"
 print "Importing modules"    
 
-# ultimately we want to make this a function, with the following input information:
 
 ##### USER DEFINED VARIABLES ######
 
+# ultimately we want to make this a function, with the following input information:
 folderPath = u'/Users/wiar9509/git/pySwath'
 inPoly='/test/testMultiLine.shp' # input shapefile filename along which raster will be sampled
 inRast='/test/vv.tif' # input raster filename to sample
 width=500.0 # across-flow box dimension [this is in the units of the projection]
 height=150.0 # along-flow box dimension
 
-outTextFilename='test.csv' # filename for textfile output
-fOutFigure='fOut.pdf' # filename for figure output
 
 ###### LOADING MODULES ######
 
@@ -35,9 +33,8 @@ from osgeo import osr
 
 ###### PROCESSING ######
 
-tempPoly='temp.shp'
-tempPoly2='temp2.shp'
-tempPoly3='temp3.shp'
+outTextSuffix='stats.csv' # filename suffix for textfile output
+figOutSuffix='statsFig.pdf' # filename suffix for figure output
 
 # create the spatial reference
 srs = osr.SpatialReference()
@@ -67,6 +64,8 @@ for lineNo in range(numLines):
  	feat=layer.GetFeature(lineNo) # Highlights current line
 	geom=feat.geometry()
 	name=feat.GetField(1) # Gets current line name
+	
+	outTextFn=folderPath+'/'+name+'_'+outTextSuffix
 	
 	print "PROCESSING TRANSECT "+name.upper()
 	print "TRANSECT "+str(lineNo+1)+" OF "+str(numLines)
@@ -111,16 +110,10 @@ for lineNo in range(numLines):
 	for coord in range(len(sampleEast)):
 		ptArray.append((sampleEast[coord],sampleNorth[coord]))
 	
-	# Plotting to make sure everything working	
-	#plt.plot(lineEast,lineNorth,'o')
-	#plt.show()
-	#plt.axis('equal')
-	
 	# Vectools to generate polygons (rectangles) for zonal stats 
 	print "Calculating the slope and perpendicular slope along the line"
 	hwin=5
-	slope, perpSlope=calcSlopeAndPerpSlope(ptArray, hwin)
-	#slope, perpSlope=calcSlopeAndPerpSlope(ptArray,int(height))
+	slope, perpSlope=calcSlopeAndPerpSlope(ptArray, hwin) # don't get this hwin thing
 
 	print "Storing the coordinates of polygons for sampling"
 	polygons=[]
@@ -131,21 +124,19 @@ for lineNo in range(numLines):
 	#calculate distance along the line
  	lineDist=distanceAlongLine(sampleEast,sampleNorth)
 	
+	
 	### CREATING POLYGONS ###
 	
 	# Sourced ideas for the below lines from http://www.gis.usu.edu/~chrisg/python/2008/os2_slides.pdf as well as https://pcjericks.github.io/py-gdalogr-cookbook/
-
 	# Initializing
 	numBoxes=len(polygons)
 
 	print "Generating and populating polygons"
-	# I am not sure what a lot of this means, but it is required to build a shapefile
 	if os.path.exists(name+"polygons.shp"):
 		driver.DeleteDataSource(name+"polygons.shp") # error if data source already exists
 	newDataSource=driver.CreateDataSource(name+"polygons.shp")
 	newLayer=newDataSource.CreateLayer(name+"polygons",srs,geom_type=ogr.wkbPolygon)
 	fieldDefn=ogr.FieldDefn('id',ogr.OFTInteger)
-	#newLayer.CreateField(ogr.FieldDefn("name",ogr.OFTString))
 	newLayer.CreateField(fieldDefn)
 	newLayer.CreateField(ogr.FieldDefn("east",ogr.OFTReal))
 	newLayer.CreateField(ogr.FieldDefn("north",ogr.OFTReal))
@@ -156,8 +147,6 @@ for lineNo in range(numLines):
 	newLayer.CreateField(ogr.FieldDefn("range",ogr.OFTReal))
 	newLayer.CreateField(ogr.FieldDefn("stddev",ogr.OFTReal))
 	newLayer.CreateField(ogr.FieldDefn("sum",ogr.OFTReal))
-
-	
 
 	# Iterating to create polygons and set fields
 	for poly in range(numBoxes):
@@ -195,6 +184,7 @@ for lineNo in range(numLines):
 	# Destroy the data source to free resources
 	newDataSource.Destroy()
 
+
 	#### GRASS PORTION ####
 	print "Creating features in GRASS and performing zonal statistics"
 
@@ -207,11 +197,12 @@ for lineNo in range(numLines):
 	# Convert polygons vector into 'zone' raster for sampling
 	grass.run_command("v.to.rast",overwrite=True,quiet=True,input='samplePolys',output='zoneRast',use='attr',attr='id')
 	# Run univariate statistics on sample raster, using zone raster to bin and populate new rows
-	grass.run_command("r.univar",overwrite=True,quiet=True,flags='t',map='sampleRast', zones='zoneRast', out=outTextFilename, sep=',',)
+	grass.run_command("r.univar",overwrite=True,quiet=True,flags='t',map='sampleRast', zones='zoneRast', out=outTextFn, sep=',',)
 	# You now have a file named $outTextFilename in the folder in which this swath profiler code lives
 	
 	### END GRASS PORTION ###
 	
+	# Initializing stats
 	min=[]
 	max=[]
 	rangeVals=[]
@@ -237,7 +228,7 @@ for lineNo in range(numLines):
 		stdDev.append(statsFile[line][9]) # standard deviation of values
 		sum.append(statsFile[line][12])	# sum of values
 
-		# Iterating over boxes
+		# Iterating over boxes to set stats
 		feat=updateLayer.GetFeature(line)
 		feat.SetField('min',min[line])
 		feat.SetField('max',max[line])
@@ -255,32 +246,4 @@ for lineNo in range(numLines):
 	# Destroy the data source to free resources
 	updateDatasource.Destroy()
 
-
-	
-	# 	print 'Save Values'
-# 	saveOut=[np.asarray(xOut), np.asarray(yOut), np.asarray(distOut),np.asarray(meanOut), np.asarray(minOut), np.asarray(maxOut)] 
-# 	np.savetxt(fOutText, np.asarray(saveOut).T, delimiter=',')
-# 
-# 	print "Make Plot"
-# 	fig1=plt.figure(num=None, figsize=(3.35, 5), dpi=300, facecolor='w', edgecolor='w')
-# 	#fig1.patch.set_alpha(0.0)
-# 
-# 	ax = fig1.add_subplot(1,1,1)
-# 
-# 	p1,=plt.plot(distOut, meanOut, lw=2, color='k', ls='-')
-# 	p2,=plt.plot(distOut, minOut, lw=1, color='grey', ls='-')
-# 	p3,=plt.plot(distOut, maxOut, lw=1, color='grey', ls='--')
-# 
-# 	lg1=plt.legend([p1, p2, p3], ['Mean', 'Minimum', 'Maximum'], loc='upper left', fancybox=True,bbox_to_anchor=(0, 1))
-# 	lg1.get_frame().set_edgecolor('grey')
-# 	lg1.get_frame().set_linewidth(0.5)
-# 
-# 	plt.tick_params(axis='both', which='major', labelsize=6)
-# 	plt.tick_params(axis='both', which='minor', labelsize=6)
-# 
-# 	plt.xlabel('Distance along Profile',fontsize=8)    
-# 	plt.ylabel('Value',fontsize=8) 
-# 	plt.title('Swath' ,fontsize=10)
-# 
-# 	plt.savefig(fOutFigure, format='pdf')
-# 	plt.show()
+	# Loop to next line in shapefile
