@@ -153,6 +153,11 @@ for lineNo in range(numLines):
 	newLayer.CreateField(ogr.FieldDefn("min",ogr.OFTReal))
 	newLayer.CreateField(ogr.FieldDefn("mean",ogr.OFTReal))
 	newLayer.CreateField(ogr.FieldDefn("max",ogr.OFTReal))
+	newLayer.CreateField(ogr.FieldDefn("range",ogr.OFTReal))
+	newLayer.CreateField(ogr.FieldDefn("stddev",ogr.OFTReal))
+	newLayer.CreateField(ogr.FieldDefn("sum",ogr.OFTReal))
+
+	
 
 	# Iterating to create polygons and set fields
 	for poly in range(numBoxes):
@@ -190,38 +195,50 @@ for lineNo in range(numLines):
 	# Destroy the data source to free resources
 	newDataSource.Destroy()
 
-	### PERFORMING ZONAL STATISTICS
-	print "Performing zonal statistics"
+	#### GRASS PORTION ####
+	print "Creating features in GRASS and performing zonal statistics"
 
-### BELOW NOT WORKING BUT KEEPING AS NOTES ###
-grass.run_command("r.in.gdal",flags='e',overwrite=True,input=folderPath+inRast,output='sampleRast')
-grass.run_command("v.in.ogr",overwrite=True,input=folderPath+'/'+name+"polygons.shp",output='samplePolys')
-grass.run_command("g.region",vec='samplePolys',res='10')
-grass.run_command("v.to.rast",overwrite=True,input='samplePolys',output='zoneRast',use='attr',attr='id')
-grass.run_command("r.univar",overwrite=True,flags='t',map='sampleRast', zones='zoneRast', out=outTextFilename, sep=',',)
-	# initialize output part2
-# 	meanOut=[]
-# 	minOut=[]
-# 	maxOut=[]
-# 	print 'Calculate the mean, min, max and distance for each part of the swath'	
-# 	ZSarea='tempTable.dbf'
-# 	outZSaT=ZonalStatisticsAsTable(tempPoly2, 'FID', inRast, ZSarea)
-# 
-# 	trows=arcpy.SearchCursor(ZSarea)
-# 	for trow in trows:
-# 		# save the 3 d area into a dictionary with the key as the FID, this is not in the loop
-# 		# since these zonal statistics only need to be done once. 
-# 		meanOut.append(trow.getValue('MEAN'))
-# 		minOut.append(trow.getValue('MIN'))
-# 		maxOut.append(trow.getValue('MAX'))
-# 	del outZSaT, trows, trow        
-# 
-# 	print 'delete the temporary files' 
-# 	# arcpy.DeleteFeatures_management (tempPoly) 
-# 	# arcpy.DeleteFeatures_management (tempPoly2) 
-# 	# arcpy.DeleteFeatures_management (ZSAREA) 
-# 
-# 	print 'Save Values'
+	# Read in raster to sample
+	grass.run_command("r.in.gdal",flags='e',overwrite=True,input=folderPath+inRast,output='sampleRast')
+	# Read in polygons to use as sampling bins
+	grass.run_command("v.in.ogr",overwrite=True,input=folderPath+'/'+name+"polygons.shp",output='samplePolys')
+	# Make sure computational region contains polygons
+	grass.run_command("g.region",vec='samplePolys',res='10')
+	# Convert polygons vector into 'zone' raster for sampling
+	grass.run_command("v.to.rast",overwrite=True,input='samplePolys',output='zoneRast',use='attr',attr='id')
+	# Run univariate statistics on sample raster, using zone raster to bin and populate new rows
+	grass.run_command("r.univar",overwrite=True,flags='t',map='sampleRast', zones='zoneRast', out=outTextFilename, sep=',',)
+	# You now have a file named $outTextFilename in the folder in which this swath profiler code lives
+	
+	### END GRASS PORTION ###
+	
+	min=[]
+	max=[]
+	rangeVals=[]
+	mean=[]
+	stdDev=[]
+	sum=[]
+	numPixels=[]
+	
+	# Read in stats file
+	print 'Reading in statistics file and updating shapefile'
+	statsFile=np.genfromtxt(outTextFilename,delimiter=',')
+	statsLen=len(statsFile)
+	
+	# Opening layer to populate stats values in shapefile created above
+	updateShapefile=ogr.Open(name+"polygons.shp")		
+	updateLayer=updateShapefile.GetLayer(0)
+	
+	for line in range(statsLen): # First value of these is nan
+		min.append(statsFile[line][4]) # minimum value of raster within polygon
+		max.append(statsFile[line][5]) # maximum value
+		rangeVals.append(statsFile[line][6]) # range of values
+		mean.append(statsFile[line][7]) # mean value
+		stdDev.append(statsFile[line][9]) # standard deviation of values
+		sum.append(statsFile[line][12])	# sum of values
+
+	
+	# 	print 'Save Values'
 # 	saveOut=[np.asarray(xOut), np.asarray(yOut), np.asarray(distOut),np.asarray(meanOut), np.asarray(minOut), np.asarray(maxOut)] 
 # 	np.savetxt(fOutText, np.asarray(saveOut).T, delimiter=',')
 # 
