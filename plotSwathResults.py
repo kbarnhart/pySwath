@@ -80,31 +80,3 @@ for line in range(numLines):
 	plt.savefig(inRast+'_profile.pdf',orientation='landscape',format='pdf')
 	plt.show()
 	plt.draw()
-	
-#	print 'Save Values'
-# 	saveOut=[np.asarray(xOut), np.asarray(yOut), np.asarray(distOut),np.asarray(meanOut), np.asarray(minOut), np.asarray(maxOut)] 
-# 	np.savetxt(fOutText, np.asarray(saveOut).T, delimiter=',')
-# 
-# 	print "Make Plot"
-# 	fig1=plt.figure(num=None, figsize=(3.35, 5), dpi=300, facecolor='w', edgecolor='w')
-# 	#fig1.patch.set_alpha(0.0)
-# 
-# 	ax = fig1.add_subplot(1,1,1)
-# 
-# 	p1,=plt.plot(distOut, meanOut, lw=2, color='k', ls='-')
-# 	p2,=plt.plot(distOut, minOut, lw=1, color='grey', ls='-')
-# 	p3,=plt.plot(distOut, maxOut, lw=1, color='grey', ls='--')
-# 
-# 	lg1=plt.legend([p1, p2, p3], ['Mean', 'Minimum', 'Maximum'], loc='upper left', fancybox=True,bbox_to_anchor=(0, 1))
-# 	lg1.get_frame().set_edgecolor('grey')
-# 	lg1.get_frame().set_linewidth(0.5)
-# 
-# 	plt.tick_params(axis='both', which='major', labelsize=6)
-# 	plt.tick_params(axis='both', which='minor', labelsize=6)
-# 
-# 	plt.xlabel('Distance along Profile',fontsize=8)    
-# 	plt.ylabel('Value',fontsize=8) 
-# 	plt.title('Swath' ,fontsize=10)
-# 
-# 	plt.savefig(fOutFigure, format='pdf')
-# 	plt.show()
