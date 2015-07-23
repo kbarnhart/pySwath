@@ -1,38 +1,47 @@
+### Swath profiler code ###
+# Written by William Armstrong and Katy Barnhart, with code modified from KRB's Arc-based profiler
+# Begun 15 July 2015
+# Finished xxxx
+
 print "STARTING SWATH PROFILER"
 print "Importing modules"    
 
-
 # ultimately we want to make this a function, with the following input information:
 
-### USER DEFINED VARIABLES ####
+##### USER DEFINED VARIABLES ######
 
 folderPath = u'/Users/wiar9509/git/pySwath'
 inPoly='/test/testMultiLine.shp' # input shapefile filename along which raster will be sampled
-inRast='vv.tif' # input raster filename to sample
-width=100.0 # across-flow box dimension [this is in the units of the projection]
-height=50.0 # along-flow box dimension
+inRast='/test/vv.tif' # input raster filename to sample
+width=500.0 # across-flow box dimension [this is in the units of the projection]
+height=150.0 # along-flow box dimension
 
-fOutText='fOutCSV.csv' # filename for textfile output
+outTextFilename='test.csv' # filename for textfile output
 fOutFigure='fOut.pdf' # filename for figure output
 
-### LOADING MODULES ###
+###### LOADING MODULES ######
 
 import os
 os.chdir(folderPath)
 import numpy as np
 from krb_vecTools import *
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 import scipy as sci 
+import grass.script as grass
 
 from osgeo import ogr # modify code to just use ogr, not arcGIS
 from osgeo import osr
 
 
-### PROCESSING ###
+###### PROCESSING ######
 
 tempPoly='temp.shp'
 tempPoly2='temp2.shp'
 tempPoly3='temp3.shp'
+
+# create the spatial reference
+srs = osr.SpatialReference()
+srs.ImportFromEPSG(32607) # This hard-coded to UTM 7N w/ WGS84 datum. Would be nice to have this defined based of input shapefile
 
 print "Opening shapefile with OGR"
 shapefile=folderPath+inPoly
@@ -43,13 +52,9 @@ crs = layer.GetSpatialRef() # Coordinate reference system
 
 numLines=layer.GetFeatureCount() # Number of lines in shapefile
 
-
-# create the spatial reference
-srs = osr.SpatialReference()
-srs.ImportFromEPSG(32607) # This hard-coded to UTM 7N w/ WGS84 datum. Would be nice to have this defined based of input shapefile
-
-
-for lineNo in range(numLines): # need to add additional info for output files if there are more than one line. 20jul15 WHA - did this in 'name' variable below
+# Iterating over number of lines in input shapefile
+for lineNo in range(numLines):
+	
 	# Initializing
 	lineEast=[]
 	lineNorth=[]
@@ -64,9 +69,10 @@ for lineNo in range(numLines): # need to add additional info for output files if
 	name=feat.GetField(1) # Gets current line name
 	
 	print "PROCESSING TRANSECT "+name.upper()
+	print "TRANSECT "+str(lineNo+1)+" OF "+str(numLines)
 	print "Getting coordinates along line"
 	
-	numPoints=geom.GetPointCount()
+	numPoints=geom.GetPointCount() # Number of vertices in polyline
 	
 	for nP in range(numPoints): # Iterates over points and appends x,y (easting, northing) coords from current line
 		lineEast.append(geom.GetPoint(nP)[0]) # change in easting from last coordinate [m]
@@ -86,11 +92,12 @@ for lineNo in range(numLines): # need to add additional info for output files if
 	dEseg=dE/pointsInSeg
 	dNseg=dN/pointsInSeg
 	
-	for segNo in range(lineSegs): # iterate over line segments to generate coordinates
+	# Iterate over line segments to generate coordinates
+	for segNo in range(lineSegs):
 		index=np.linspace(1,pointsInSeg[segNo]+1,pointsInSeg[segNo]+1) # list from 1 to number of sampling points in line segment
 		sampleEast.append(lineEast[segNo]+dEseg[segNo]*index)
 		sampleNorth.append(lineNorth[segNo]+dNseg[segNo]*index)
-		plt.plot(sampleEast[segNo],sampleNorth[segNo],'.')
+		#plt.plot(sampleEast[segNo],sampleNorth[segNo],'.')
 		
 	# Was in a weird format before because of segNo loop. This makes it a better array
 	sampleEast=np.concatenate(sampleEast,axis=0)
@@ -105,16 +112,17 @@ for lineNo in range(numLines): # need to add additional info for output files if
 		ptArray.append((sampleEast[coord],sampleNorth[coord]))
 	
 	# Plotting to make sure everything working	
-	plt.plot(lineEast,lineNorth,'o')
-	plt.show()
-	plt.axis('equal')
+	#plt.plot(lineEast,lineNorth,'o')
+	#plt.show()
+	#plt.axis('equal')
 	
 	# Vectools to generate polygons (rectangles) for zonal stats 
 	print "Calculating the slope and perpendicular slope along the line"
 	hwin=5
 	slope, perpSlope=calcSlopeAndPerpSlope(ptArray, hwin)
+	#slope, perpSlope=calcSlopeAndPerpSlope(ptArray,int(height))
 
-	print "Storing the coordiates of the swath cross section lines"
+	print "Storing the coordinates of polygons for sampling"
 	polygons=[]
 	for i in range(len(ptArray)):
 		polygons.append(makePoly(ptArray[i], perpSlope[i], width, height))
@@ -125,11 +133,12 @@ for lineNo in range(numLines): # need to add additional info for output files if
 	
 	### CREATING POLYGONS ###
 	
-	# Sourced ideas for the below lines from http://www.gis.usu.edu/~chrisg/python/2008/os2_slides.pdf
-	
+	# Sourced ideas for the below lines from http://www.gis.usu.edu/~chrisg/python/2008/os2_slides.pdf as well as https://pcjericks.github.io/py-gdalogr-cookbook/
+
 	# Initializing
 	numBoxes=len(polygons)
 
+	print "Generating and populating polygons"
 	# I am not sure what a lot of this means, but it is required to build a shapefile
 	if os.path.exists(name+"polygons.shp"):
 		driver.DeleteDataSource(name+"polygons.shp") # error if data source already exists
@@ -144,8 +153,13 @@ for lineNo in range(numLines): # need to add additional info for output files if
 	newLayer.CreateField(ogr.FieldDefn("min",ogr.OFTReal))
 	newLayer.CreateField(ogr.FieldDefn("mean",ogr.OFTReal))
 	newLayer.CreateField(ogr.FieldDefn("max",ogr.OFTReal))
+	newLayer.CreateField(ogr.FieldDefn("range",ogr.OFTReal))
+	newLayer.CreateField(ogr.FieldDefn("stddev",ogr.OFTReal))
+	newLayer.CreateField(ogr.FieldDefn("sum",ogr.OFTReal))
 
-	# Iterating over coordinates to create polygons
+	
+
+	# Iterating to create polygons and set fields
 	for poly in range(numBoxes):
 		# create the feature
 		feature = ogr.Feature(newLayer.GetLayerDefn())
@@ -178,32 +192,53 @@ for lineNo in range(numLines): # need to add additional info for output files if
 		# Destroy the feature to free resources
 		feature.Destroy()
 
-		# Destroy the data source to free resources
+	# Destroy the data source to free resources
 	newDataSource.Destroy()
-	 	
-	# initialize output part2
-# 	meanOut=[]
-# 	minOut=[]
-# 	maxOut=[]
-# 	print 'Calculate the mean, min, max and distance for each part of the swath'	
-# 	ZSarea='tempTable.dbf'
-# 	outZSaT=ZonalStatisticsAsTable(tempPoly2, 'FID', inRast, ZSarea)
-# 
-# 	trows=arcpy.SearchCursor(ZSarea)
-# 	for trow in trows:
-# 		# save the 3 d area into a dictionary with the key as the FID, this is not in the loop
-# 		# since these zonal statistics only need to be done once. 
-# 		meanOut.append(trow.getValue('MEAN'))
-# 		minOut.append(trow.getValue('MIN'))
-# 		maxOut.append(trow.getValue('MAX'))
-# 	del outZSaT, trows, trow        
-# 
-# 	print 'delete the temporary files' 
-# 	# arcpy.DeleteFeatures_management (tempPoly) 
-# 	# arcpy.DeleteFeatures_management (tempPoly2) 
-# 	# arcpy.DeleteFeatures_management (ZSAREA) 
-# 
-# 	print 'Save Values'
+
+	#### GRASS PORTION ####
+	print "Creating features in GRASS and performing zonal statistics"
+
+	# Read in raster to sample
+	grass.run_command("r.in.gdal",flags='e',overwrite=True,input=folderPath+inRast,output='sampleRast')
+	# Read in polygons to use as sampling bins
+	grass.run_command("v.in.ogr",overwrite=True,input=folderPath+'/'+name+"polygons.shp",output='samplePolys')
+	# Make sure computational region contains polygons
+	grass.run_command("g.region",vec='samplePolys',res='10')
+	# Convert polygons vector into 'zone' raster for sampling
+	grass.run_command("v.to.rast",overwrite=True,input='samplePolys',output='zoneRast',use='attr',attr='id')
+	# Run univariate statistics on sample raster, using zone raster to bin and populate new rows
+	grass.run_command("r.univar",overwrite=True,flags='t',map='sampleRast', zones='zoneRast', out=outTextFilename, sep=',',)
+	# You now have a file named $outTextFilename in the folder in which this swath profiler code lives
+	
+	### END GRASS PORTION ###
+	
+	min=[]
+	max=[]
+	rangeVals=[]
+	mean=[]
+	stdDev=[]
+	sum=[]
+	numPixels=[]
+	
+	# Read in stats file
+	print 'Reading in statistics file and updating shapefile'
+	statsFile=np.genfromtxt(outTextFilename,delimiter=',')
+	statsLen=len(statsFile)
+	
+	# Opening layer to populate stats values in shapefile created above
+	updateShapefile=ogr.Open(name+"polygons.shp")		
+	updateLayer=updateShapefile.GetLayer(0)
+	
+	for line in range(statsLen): # First value of these is nan
+		min.append(statsFile[line][4]) # minimum value of raster within polygon
+		max.append(statsFile[line][5]) # maximum value
+		rangeVals.append(statsFile[line][6]) # range of values
+		mean.append(statsFile[line][7]) # mean value
+		stdDev.append(statsFile[line][9]) # standard deviation of values
+		sum.append(statsFile[line][12])	# sum of values
+
+	
+	# 	print 'Save Values'
 # 	saveOut=[np.asarray(xOut), np.asarray(yOut), np.asarray(distOut),np.asarray(meanOut), np.asarray(minOut), np.asarray(maxOut)] 
 # 	np.savetxt(fOutText, np.asarray(saveOut).T, delimiter=',')
 # 

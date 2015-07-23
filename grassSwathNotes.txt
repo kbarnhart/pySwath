@@ -1,0 +1,13 @@
+grass swath profiler notes
+wha 22 jul 15
+
+GRASS STEPS FOR SWATH PROFILER
+1.) Import input vector
+"v.in.ogr in=inputVec out=vecName"
+2.) Set region extent and resolution to that of shapefile
+"g.region vector=vecName res=50" (or whatever resolution you need to resolve the input shapefile)
+"v.to.rast in=vecName out=outRastName use=attr attr=id"
+The 'use' and 'attr' parts tell it to use the field id to convert vectors.
+3.) Run raster statistics for each 'zone'
+"r.univar -t --overwrite map=sampleRaster zones=outRastName out=outputTextName sep=,"
+The '-t' flag tells it to output a table text file, 'sep' tells it what separator to use for this file. 'map' is the raster on which we're trying to calculate statistics.
